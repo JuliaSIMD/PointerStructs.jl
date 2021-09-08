@@ -1,0 +1,5 @@
+
+macro pointer(ex)
+  
+end
+

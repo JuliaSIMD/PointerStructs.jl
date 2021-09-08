@@ -1,5 +1,8 @@
 module PointerStructs
 
-# Write your package code here.
+using UnPack
+
+include("ptrarrays.jl")
+include("structmacro.jl")
 
 end
