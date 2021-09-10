@@ -1,6 +1,8 @@
 module PointerStructs
 
-using UnPack
+using UnPack, Static
+
+export @pointer
 
 include("ptrarrays.jl")
 include("structmacro.jl")
