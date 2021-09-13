@@ -12,8 +12,8 @@ function offset end
 create_offset_expr(offset_expr::Expr, known_offset::Int) = known_offset == 0 ? offset_expr : :($offset_expr + $known_offset)
 
 function push_field!(
-  ret::Expr,
-  sym::Symbol, typ::Symbol, name::Symbol, offset_expr::Expr, known_offset::Int, field_mappings::Dict{Tuple{Symbol,Symbol},Symbol}, ismut::Bool, mod::Module
+  ret::Expr, structfields::Expr,
+  sym::Symbol, typ::Symbol, name::Symbol, offset_expr::Expr, known_offset::Int, field_mappings::Dict{Tuple{Symbol,Symbol},QuoteNode}, ismut::Bool, mod::Module
 )::Tuple{Expr,Int}
   type = getroperty(mod, typ)
   if ispointerstruct(type)::Bool
@@ -31,7 +31,7 @@ function push_field!(
       unpackprop = get(field_mappings, (sym,fn), nothing)
       if unpackprop ≢ nothing
         # unpack from earlier
-        push!(construct_expr.args, :($unpack(x, $Val{$(QuoteNode(unpackprop))}())))
+        push!(construct_expr.args, :($unpack(x, $Val{$unpackprop}())))
       else
         ft = fts[i]
         new_field_name = QuoteNode(Symbol(sym, "_", fn))
@@ -43,7 +43,8 @@ function push_field!(
           push!(ret.args, unpack_expr, pack_expr)
           known_offset += sizeof(ft)
         else
-          unpack_expr = :($unpack(x::$name, ::Val{$new_field_name}) = unsafe_load(reinterpret(Ptr{$ft}, $(create_offset_expr(offset_expr, known_offset)))))
+          push!(structfields.args, Expr(:(::), new_field_name, ft))
+          unpack_expr = :($unpack(x::$name, ::Val{$new_field_name}) = $getfield(x, $new_field_name))
         end
         # if isbitstype(ft)
         # elseif ismut # new mut alloc
@@ -85,7 +86,7 @@ macro pointer(ex)
   ret = Expr(:block, __source__, structdef)
   known_offset = 0
   offset_expr = :(pointer(x))
-  field_mappings = Dict{Tuple{Symbol,Symbol},Symbol}() # (sym,
+  field_mappings = Dict{Tuple{Symbol,Symbol},QuoteNode}() # (sym,
   for field ∈ fieldargs
     if field isa LineNumberNode
       push!(structfields.args, field)
@@ -95,7 +96,7 @@ macro pointer(ex)
     sym::Symbol = field.args[1]
     typ = (field.args[2])::Union{Symbol,Expr}
     if typ isa Symbol
-      offset_expr, known_offset = push_field!(ret, sym, typ, name, offset_expr, known_offset, field_mappings, ismut, mod)
+      offset_expr, known_offset = push_field!(ret, structfields, sym, typ, name, offset_expr, known_offset, field_mappings, ismut, mod)
     elseif Meta.isexpr(typ, :call, 2)
       if typ.args[1] === :(=>)
 
