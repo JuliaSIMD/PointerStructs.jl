@@ -1,6 +1,7 @@
 module PointerStructs
 
-using UnPack, Static
+using Static
+using UnPack: unpack, repack!
 
 export @pointer
 
