@@ -4,6 +4,9 @@ struct PtrArray{T,N,S<:NInts{N},X<:NInts{N}} <: DenseArray{T,N}
   size::S
   strides::X
 end
+ispointerstruct(::Type{<:PtrArray}) = true
+# `(... + 7) & -8` is eliminated whenever `sizeof(T) == 8`
+@inline offset(A::PtrArray{T}) where {T} = (sizeof(T) * length(A) + 7) & -8
 
 @inline Base.size(A::PtrArray) = map(Int, getfield(A,:size))
 @inline Base.length(A::PtrArray) = prod(size(A))
