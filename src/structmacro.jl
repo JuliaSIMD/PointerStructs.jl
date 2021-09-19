@@ -37,6 +37,7 @@ function push_fields!(
   offset_expr, known_offset
 end
 function align_offset(st::Int, known_offset::Int)
+  # half-hearted attempt at alignment
   alignment = (known_offset & min(st-1,7))
   ifelse(alignment == 0, known_offset, known_offset + min(st,8) - alignment)
 end
@@ -46,8 +47,8 @@ function push_nonnested_field!(
   if ismut
     st = sizeof(typ)::Int
     known_offset = align_offset(st, known_offset)
-    unpack_expr = :($unpack(x::$name, ::Val{$sym}) = $unsafe_load($reinterpret(Ptr{$typ}, $(create_offset_expr(offset_expr, known_offset)))))
-    pack_expr = :($pack!(x::$name, ::Val{$sym}, val) = $unsafe_store!($reinterpret(Ptr{$typ}, $(create_offset_expr(offset_expr, known_offset))), $convert($typ, val)))
+    unpack_expr = :($unpack(x::$name, ::Val{$sym}) = $unsafe_load($reinterpret($(Ptr{typ}), $(create_offset_expr(offset_expr, known_offset)))))
+    pack_expr = :($pack!(x::$name, ::Val{$sym}, val) = $unsafe_store!($reinterpret($(Ptr{typ}), $(create_offset_expr(offset_expr, known_offset))), $convert($typ, val)))
     push!(ret.args, unpack_expr, pack_expr)
     known_offset += st
   else
@@ -60,7 +61,8 @@ end
 
 function push_field!(
   ret::Expr, structfields::Expr, pair_types::Dict{Symbol,DataType},
-  sym::Symbol, @nospecialize(type::DataType), name::Symbol, offset_expr::Expr, known_offset::Int, field_mappings::Dict{Symbol,Dict{Symbol,Symbol}}, ismut::Bool
+  sym::Symbol, @nospecialize(type::DataType), name::Symbol,
+  offset_expr::Expr, known_offset::Int, field_mappings::Dict{Symbol,Dict{Symbol,Symbol}}, ismut::Bool
 )::Tuple{Expr,Int}
   
   if Base.isbitstype(type)
@@ -159,7 +161,7 @@ macro pointer(ex)
   name::Symbol = args[2]
   # name::Union{Symbol,Expr} = args[2]
   fieldargs::Vector{Any} = ((args[3])::Expr).args
-  structfields = Expr(:block, Expr(:(::), Symbol("##pointer##"), Ptr{UInt8}))
+  structfields = Expr(:block, Expr(:(::), Symbol("##pointer##"), Ptr{Cvoid}))
   structdef = Expr(:struct, false, name, structfields)
   # we mutate ex
   ret = Expr(:block, __source__, structdef, :($ispointerstruct(::Type{$name})=true))

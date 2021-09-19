@@ -1,6 +1,6 @@
 module PointerStructs
 
-using Static
+using Static, UnPack
 using Static: Zero, One
 using UnPack: unpack, pack!
 
