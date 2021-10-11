@@ -90,8 +90,8 @@ Base.@propagate_inbounds function Base.setindex!(A::DArray, v, i::Vararg{Any,K})
   end
 end
 
-const DVector{T,L} = DArray{T,1,Tuple{UInt32},Tuple{StaticInt{1}},L}
-const DMatrix{T,L} = DArray{T,2,Tuple{UInt32,UInt32},Tuple{StaticInt{1},UInt32},L}
+const DVector{T,L} = DArray{T,1,Tuple{Int},Tuple{StaticInt{1}},L}
+const DMatrix{T,L} = DArray{T,2,Tuple{Int,Int},Tuple{StaticInt{1},Int},L}
 
 @inline DArray(m::Memory, sz::Tuple) = DArray(ptrarray(pointer(m), sz), m)
 @inline DArray{T,L}(::UndefInitializer, sz) where {T,L} = DArray(Memory{T,L}(undef), sz)
