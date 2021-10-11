@@ -14,10 +14,10 @@ ispointerstruct(::Type{<:PtrArray}) = true
 @inline Base.strides(A::PtrArray) = map(Int, getfield(A,:strides))
 @inline Base.unsafe_convert(::Type{Ptr{T}}, A::PtrArray{T}) where {T} = getfield(A,:ptr)
 @inline Base.pointer(A::PtrArray) = getfield(A, :ptr)
-@inline tdot(x::Tuple{X}, i::Tuple{I1,I2}) where {X,I1,I2} = only(x)*getfield(i,1)
-@inline tdot(x::Tuple{X}, i::Tuple{I}) where {X,I} = only(x)*only(i)
-@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I1,I2,Vararg}) where {X1,X2,I1,I2} = first(x)*first(i) + tdot(Base.tail(x), Base.tail(i))
-@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I}) where {X1,X2,I} = first(x)*only(i)
+@inline tdot(x::Tuple{X}, i::Tuple{I1,I2}) where {X,I1,I2} = getfield(x,1)*getfield(i,1)
+@inline tdot(x::Tuple{X}, i::Tuple{I}) where {X,I} = getfield(x,1)*getfield(i,1)
+@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I1,I2,Vararg}) where {X1,X2,I1,I2} = getfield(x,1)*getfield(i,1) + tdot(Base.tail(x), Base.tail(i))
+@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I}) where {X1,X2,I} = getfield(x,1)*getfield(i,1)
 
 Base.@propagate_inbounds function Base.getindex(x::PtrArray{T}, i::Vararg{Integer,K}) where {K,T}
   Base.@boundscheck checkbounds(x, i...)
@@ -29,7 +29,7 @@ Base.@propagate_inbounds function Base.setindex!(x::PtrArray{T}, v, i::Vararg{In
 end
 
 @inline sxcumprod(c, sz::Tuple{}) = ()
-@inline sxcumprod(c, sz::NInts) = (c, sxcumprod(c * first(sz), Base.tail(sz))...)
+@inline sxcumprod(c, sz::NInts) = (c, sxcumprod(c * getfield(sz,1), Base.tail(sz))...)
 @inline function ptrarray(ptr::Ptr, sz::NInts{N}) where {N}
   sx = sxcumprod(One(), sz)
   PtrArray(ptr, sz, sx), ptr + last(sz)*last(sx)
