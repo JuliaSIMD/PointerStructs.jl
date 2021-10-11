@@ -12,7 +12,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 CloseOpenIntervals = "0.1.2"
 Static = "0.3.3"
 UnPack = "1"
-julia = "1"
+julia = "1.2"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
