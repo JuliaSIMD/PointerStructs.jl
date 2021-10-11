@@ -14,8 +14,9 @@ ispointerstruct(::Type{<:PtrArray}) = true
 @inline Base.strides(A::PtrArray) = map(Int, getfield(A,:strides))
 @inline Base.unsafe_convert(::Type{Ptr{T}}, A::PtrArray{T}) where {T} = getfield(A,:ptr)
 @inline Base.pointer(A::PtrArray) = getfield(A, :ptr)
+@inline tdot(x::Tuple{X}, i::Tuple{I1,I2}) where {X,I1,I2} = only(x)*getfield(i,1)
 @inline tdot(x::Tuple{X}, i::Tuple{I}) where {X,I} = only(x)*only(i)
-@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I1,I2,Vararg}) where {X1,X2,I1,I2} = first(x)*first(i) + tdot(Base.tail(x), Base.tail(y))
+@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I1,I2,Vararg}) where {X1,X2,I1,I2} = first(x)*first(i) + tdot(Base.tail(x), Base.tail(i))
 @inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I}) where {X1,X2,I} = first(x)*only(i)
 
 Base.@propagate_inbounds function Base.getindex(x::PtrArray{T}, i::Vararg{Integer,K}) where {K,T}
