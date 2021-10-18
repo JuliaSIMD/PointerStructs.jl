@@ -246,6 +246,13 @@ macro pointer(ex)
   # we mutate ex
   # ret = Expr(:block, __source__, structdef, :($ispointerstruct(::Type{$name})=true))
   ret = Expr(:block, __source__, structdef, :($PointerStructs.ispointerstruct(::Type{$name})=true))
+  if Base.isdefined(Base, Symbol("@constprop"))
+    push!(ret.args, :(@inline Base.@constprop :aggressive Base.getproperty(x::$name, s::Symbol) = $(UnPack.unpack)(x, Val(s))))
+    push!(ret.args, :(@inline Base.@constprop :aggressive Base.setproperty!(x::$name, s::Symbol, v) = $(UnPack.pack!)(x, Val(s), v)))
+  else
+    push!(ret.args, :(@inline Base.getproperty(x::$name, s::Symbol) = $(UnPack.unpack)(x, Val(s))))
+    push!(ret.args, :(@inline Base.setproperty!(x::$name, s::Symbol, v) = $(UnPack.pack!)(x, Val(s), v)))
+  end
   known_offset = 0
   # offset_expr = :(pointer(x))
   # offset_expr = :($getfield(x, Symbol("##pointer##")))

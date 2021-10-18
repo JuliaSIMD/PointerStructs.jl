@@ -29,6 +29,8 @@ end
     b = 0.0
     @unpack b = foo;
     @test b == 3.14
+    foo.b = 13.4
+    @test foo.b == 13.4
     
     @test d == 10
     @unpack a, b, c = c;

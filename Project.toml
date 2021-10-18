@@ -1,7 +1,7 @@
 name = "PointerStructs"
 uuid = "0ac99047-f20c-4964-adcf-e848779dacfc"
 authors = ["Julia Computing and contributors"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 CloseOpenIntervals = "fb6a15b2-703c-40df-9091-08a04967cfa9"
