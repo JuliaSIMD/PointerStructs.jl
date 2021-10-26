@@ -10,23 +10,11 @@ ispointerstruct(::Type{<:PtrArray}) = true
 
 @inline Base.size(A::PtrArray) = map(Int, getfield(A,:size))
 @inline Base.length(A::PtrArray) = prod(size(A))
-@inline Base.axes(A::PtrArray) = map(CloseOpen, getfield(A,:size))
+# @inline Base.axes(A::PtrArray) = map(CloseOpen, getfield(A,:size))
+@inline Base.axes(A::PtrArray) = map(SafeCloseOpen, getfield(A,:size))
 @inline Base.strides(A::PtrArray) = map(Int, getfield(A,:strides))
 @inline Base.unsafe_convert(::Type{Ptr{T}}, A::PtrArray{T}) where {T} = getfield(A,:ptr)
 @inline Base.pointer(A::PtrArray) = getfield(A, :ptr)
-@inline tdot(x::Tuple{X}, i::Tuple{I1,I2}) where {X,I1,I2} = getfield(x,1)*getfield(i,1)
-@inline tdot(x::Tuple{X}, i::Tuple{I}) where {X,I} = getfield(x,1)*getfield(i,1)
-@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I1,I2,Vararg}) where {X1,X2,I1,I2} = getfield(x,1)*getfield(i,1) + tdot(Base.tail(x), Base.tail(i))
-@inline tdot(x::Tuple{X1,X2,Vararg}, i::Tuple{I}) where {X1,X2,I} = getfield(x,1)*getfield(i,1)
-
-Base.@propagate_inbounds function Base.getindex(x::PtrArray{T}, i::Vararg{Integer,K}) where {K,T}
-  Base.@boundscheck checkbounds(x, i...)
-  unsafe_load(pointer(x) + sizeof(T)*tdot(strides(x),i))
-end
-Base.@propagate_inbounds function Base.setindex!(x::PtrArray{T}, v, i::Vararg{Integer,K}) where {K,T}
-  Base.@boundscheck checkbounds(x, i...)
-  unsafe_store!(pointer(x) + sizeof(T)*tdot(strides(x),i), convert(T, v))
-end
 
 @inline sxcumprod(c, sz::Tuple{}) = ()
 @inline sxcumprod(c, sz::NInts) = (c, sxcumprod(c * getfield(sz,1), Base.tail(sz))...)
@@ -36,26 +24,100 @@ end
 end
 @inline ptrarray(ptr::Ptr, sz::Vararg{Integer,N}) where {N} = ptrarray(ptr, sz)
 
-const PtrVector{T} = PtrArray{T,1,Tuple{Int},Tuple{StaticInt{1}}}
-const PtrMatrix{T} = PtrArray{T,2,Tuple{Int,Int},Tuple{StaticInt{1},Int}}
+const PtrVector{T,L} = PtrArray{T,1,Tuple{L},Tuple{StaticInt{1}}}
+const PtrMatrix{T,M,N} = PtrArray{T,2,Tuple{M,N},Tuple{StaticInt{1},M}}
+const DPtrVector{T} = PtrVector{T,Int}
+const DPtrMatrix{T} = PtrMatrix{T,Int,Int}
 
-@inline function Base.getindex(A::PtrArray{T,2}, ::Colon, i::Integer) where {T}
-  p = pointer(A)
-  s1,s2 = A.size
-  x1,x2 = A.strides
-  PtrArray{T}(p+i*s2*sizeof(T), (s1,), (x1,))
+@inline filtercolon(p::Ptr, s::Tuple{}, x::Tuple{}, i::Tuple{}) = p, (), ()
+@inline function filtercolon(p::Ptr{T}, s::Tuple{S}, x::Tuple{X}, i::Tuple{AbstractUnitRange}) where {T,S,X}
+  r = getfield(i,1)
+  x1 = getfield(x,1)
+  p + sizeof(T)*(x1*first(r)), (length(r),), (x1,)
 end
-@inline function Base.getindex(A::PtrArray{T,2}, i::Integer, ::Colon) where {T}
-  p = pointer(A)
-  s1,s2 = A.size
-  x1,x2 = A.strides
-  PtrArray{T}(p+i*s1*sizeof(T), (s2,), (x2,))
+@inline filtercolon(p::Ptr, s::Tuple{S}, x::Tuple{X}, i::Tuple{Colon}) where {S,X} = p, (getfield(s,1),), (getfield(x,1),)
+@inline filtercolon(p::Ptr{T}, s::Tuple{S}, x::Tuple{X}, i::Tuple{Integer}) where {S,T,X} = p + sizeof(T)*(getfield(x,1)*getfield(i,1)), (), ()
+
+@inline function filtercolon(p::Ptr{T}, s::Tuple{S1,S2,Vararg}, x::Tuple{X1,X2,Vararg}, i::Tuple{I1,I2,Vararg}) where {T,S1,S2,X1,X2,I1<:AbstractUnitRange,I2}
+  p2, s2, x2 = filtercolon(p, Base.tail(s), Base.tail(x), Base.tail(i))
+  r = getfield(i,1); x1 = getfield(x,1)
+  p2 + sizeof(T)*(x1*first(r)), (length(r), s2...), (x1, x2...)
 end
-@inline function Base.getindex(A::PtrArray{T,3}, ::Colon, ::Colon, i::Integer) where {T}
-  p = pointer(A)
-  s1,s2,s3 = A.size
-  x1,x2,x3 = A.strides
-  PtrArray{T}(p + sizeof(T)*s3*i, (s1,s2), (x1,x2))
+@inline function filtercolon(p::Ptr, s::Tuple{S1,S2,Vararg}, x::Tuple{X1,X2,Vararg}, i::Tuple{Colon,I1,Vararg}) where {S1,S2,X1,X2,I1}
+  p2, s2, x2 = filtercolon(p, Base.tail(s), Base.tail(x), Base.tail(i))
+  p2, (getfield(s,1), s2...), (getfield(x,1), x2...)
+end
+@inline function filtercolon(p::Ptr{T}, s::Tuple{S1,S2,Vararg}, x::Tuple{X1,X2,Vararg}, i::Tuple{Integer,I1,Vararg}) where {T,S1,S2,X1,X2,I1}
+  p2, s2, x2 = filtercolon(p, Base.tail(s), Base.tail(x), Base.tail(i))
+  p2 + sizeof(T)*(getfield(x,1)*getfield(i,1)), s2, x2
 end
 
+@inline _getindex(p::Ptr, s::Tuple{}, x::Tuple{}) = unsafe_load(p)
+@inline _getindex(p::Ptr, s::Tuple{S,Vararg}, x::Tuple{X,Vararg}) where {S,X} = PtrArray(p, s, x)
+Base.@propagate_inbounds function Base.getindex(A::PtrArray{T,N}, i::Vararg{Union{Integer,Colon},N}) where {T,N}
+  Base.@boundscheck checkbounds(A, i...)
+  p, s, x = filtercolon(pointer(A), A.size, A.strides, i)
+  _getindex(p, s, x)
+end
+Base.@propagate_inbounds function Base.getindex(A::PtrArray{T,N}, i::Integer) where {T,N}
+  Base.@boundscheck checkbounds(A, i)
+  _getindex(pointer(A) + i*sizeof(T), (), ())
+end
+Base.@propagate_inbounds function Base.getindex(A::PtrArray{T,1}, i::Integer) where {T}
+  Base.@boundscheck checkbounds(A, i)
+  _getindex(pointer(A) + i*sizeof(T), (), ())
+end
+Base.@propagate_inbounds function Base.getindex(A::PtrArray{T,1}, r::AbstractUnitRange) where {T}
+  Base.@boundscheck checkbounds(A, r)
+  p, s, x = filtercolon(pointer(A), A.size, A.strides, (r,))
+  _getindex(p, s, x)
+end
+
+@inline _setindex!(p::Ptr{T}, v, ::Tuple{}, ::Tuple{}) where {T} = unsafe_store!(p, convert(T, v))
+@inline _setindex!(p::Ptr{T}, v::AbstractArray{<:Any,0}, ::Tuple{}, ::Tuple{}) where {T} = unsafe_store!(p, convert(T, v[]))
+@inline function _setindex!(p::Ptr, v::AbstractArray{<:Any,N}, s::NInts{N}, x::NInts{N}) where {N}
+  d = PtrArray(p, s, x)
+  for i in eachindex(d, v)
+    @inbounds d[i] = v[i]
+  end
+end
+
+Base.@propagate_inbounds function Base.setindex!(A::PtrArray{T,N}, v, i::Vararg{Union{Integer,Colon},N}) where {T,N}
+  Base.@boundscheck checkbounds(A, i...)
+  p, s, x = filtercolon(pointer(A), A.size, A.strides, i)
+  _setindex!(p, v, s, x)
+end
+Base.@propagate_inbounds function Base.setindex!(A::PtrArray{T,N}, v, i::Integer) where {T,N}
+  Base.@boundscheck checkbounds(A, i)
+  _setindex!(pointer(A) + sizeof(T)*i, v, (), ())
+end
+Base.@propagate_inbounds function Base.setindex!(A::PtrArray{T,1}, v, i::Integer) where {T}
+  Base.@boundscheck checkbounds(A, i)
+  _setindex!(pointer(A) + sizeof(T)*i, v, (), ())
+end
+
+Base.@propagate_inbounds Base.getindex(A::PtrArray{<:Any,N}, I::CartesianIndices{N}) where {N} = A[Tuple(I)...]
+Base.@propagate_inbounds Base.setindex!(A::PtrArray{<:Any,N}, v, I::CartesianIndices{N}) where {N} = A[Tuple(I)...] = v
+
+function Base.getindex(a::PtrVector{T}, i::PtrVector{I}) where {T,I<:Integer}
+  b = Vector{T}(undef, length(a))
+  @inbounds for j ∈ eachindex(i)
+    b[j+1] = a[i[j]]
+  end
+  return b
+end
+
+_indstyle(::StaticInt{1}) = Base.IndexLinear()
+_indstyle(_) = Base.IndexCartesian()
+Base.IndexStyle(A::PtrVector) = _indstyle(getfield(A.strides,1))
+
+Base.LinearIndices(x::PtrVector) = CloseOpen(length(x))
+function Base.Array(A::PtrArray{T}) where {T}
+  B = Array{T}(undef, size(A))
+  @inbounds for I ∈ eachindex(A)
+    B[I + one(I)] = A[I]
+  end
+  return B
+end
+Base.Array{<:Any,N}(A::PtrArray{<:Any,N}) where {N} = Array(A)
 
